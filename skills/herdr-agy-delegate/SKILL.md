@@ -65,7 +65,7 @@ For Hard tasks, create nothing yet (no spaces, worktrees, or agents). Produce a 
 | Tasks | One per agy. Disjoint file scope each (name the files/dirs). If two tasks touch the same file, serialize them. |
 | Isolation | One git worktree + branch per task: `git worktree add ../<repo>-<task> -b delegate/<task>` |
 | Spaces | `agy-<task>` per agent. Default max **3** parallel agents unless the user says more. |
-| Mode | `--dangerously-skip-permissions` by default for Hard tasks (the user allowed it), with the section 4b guardrails; say so in the plan. Use default mode (4a) instead if the task touches secrets, deploys, infra, or system config. `--mode plan` for read-only research. |
+| Mode | Hard: `--dangerously-skip-permissions` by default (the user allowed it), with the section 4b guardrails; say so in the plan. If the task touches secrets, deploys, infra, or system config, use `--mode accept-edits` and answer prompts yourself (4a). **Never `--mode plan`**: the agent must be able to act. Read-only research: `accept-edits` plus a brief that forbids changes, then check the diff is empty. |
 | Gates | The project's real test/lint/build commands, per task. |
 | Approval policy | In skip mode: the 4b guardrails. In default mode: the allow-list and escalation list from 4a, adjusted for this task. |
 | Landing | Commit on `delegate/<task>` after review; whether to merge into the user's branch. |
@@ -90,7 +90,9 @@ herdr-app do space.new --name "agy-<task>" --folder <worktree>
 
 # 3. agent, attached to that space by label; brief goes in as the first prompt
 hc run --bg --name agy-<task> --cwd <worktree> --label herdr.space=<space-id> \
-  -- agy [--dangerously-skip-permissions] -i "$(cat /tmp/delegate/<task>.md)"   # flag only per section 4b
+  -- agy <mode-flag> -i "$(cat /tmp/delegate/<task>.md)"
+# <mode-flag>: --mode accept-edits   (default; you answer its command prompts, section 4a)
+#              --dangerously-skip-permissions   (only per section 4b; leave --mode off)
 
 # 4. the space starts with an empty shell tab; close it
 herdr-app do tab.close --id <default-tab-id> --confirmed true
@@ -133,7 +135,13 @@ hc read <t> --lines 0             # the screen - always read it before pressing 
 
 ## 4. Answering agy's prompts
 
-### 4a. Default mode (no skip flag)
+**You answer, not the user.** The user talks only to you; the agy sessions are yours to manage. Never
+tell them to go press something in an agy space. When agy asks for something, decide by the rules below and
+press the keys yourself with `hc keys`. When a rule says to ask the user, ask here in this chat, then relay
+their answer into the pane yourself. Don't leave an agent sitting blocked: act on it as soon as `hc wait`
+reports it.
+
+### 4a. `--mode accept-edits` (the default; no skip flag)
 
 agy asks as a numbered menu; herdr reports it as `blocked` with `kind: permission` and
 `msg: "Approve RunCommand: <cmd>"`. Verified menu and keys:
@@ -157,8 +165,8 @@ not use `--force` to get around a permission decision.
 - **Answer 4 yourself** if it is out of scope but harmless (e.g. unrequested `git log`, exploring beside
   the task - verified: agy does this). Then `hc send <t> "<redirect back to the task>"`; the denied agent
   returns to idle with "What should Antigravity do instead?".
-- **Escalate to the user** (show the exact command, wait for their answer, leave the agent blocked
-  meanwhile) for: network access (`curl`, `wget`, `npm/pip install`, `git fetch/pull/push`), `git commit`,
+- **Ask the user in this chat** (show the exact command; they answer you, never the agy pane; you press
+  the key; the agent stays blocked meanwhile) for: network access (`curl`, `wget`, `npm/pip install`, `git fetch/pull/push`), `git commit`,
   `checkout`, `reset`, `rebase`, `clean`, `stash`, anything with `sudo` or `rm`, any path outside the
   worktree (including `~`, `/etc`, other repos), writes to dotfiles or config, environment/secret reads
   (`env`, `.env`, `printenv`, keys), `chmod`, process control, or anything you do not fully understand.
@@ -229,6 +237,9 @@ escalated, and what is left. Mention any session you left running on purpose.
 - Prompt wording and menu order can change with agy versions: always `hc read` before pressing keys.
 - Permission menus beyond `RunCommand`, and agy's question/choice dialogs, were not exercised.
 - Parallel agents multiply the user's Antigravity quota use; keep the count in the plan.
+- `--mode accept-edits` and `--mode auto` exist in `agy --help` but were not run here (the verified
+  prompt behaviour above is from agy's default mode). On first use, `hc get` the status to see which
+  prompts still block, and adjust 4a. `--mode auto` is untested: don't use it until checked.
 - `--dangerously-skip-permissions` exists in `agy --help` but was not run here. On its first use, check
   with `hc get` / `hc read` that it really stopped prompting, and whether the trust dialog still appears.
 - The token thresholds are rough estimates by feel, not measured; re-tier if a task proves bigger.
